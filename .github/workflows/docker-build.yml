@@ -1,15 +1,18 @@
-name: Docker Build
+name: CI/CD Pipeline
 
 on:
   push:
     branches: ["main", "master"]
+    tags: ["v*.*.*"]
   pull_request:
     branches: ["main", "master"]
 
 jobs:
-  build:
+  # Job 1: CI - Test and Build Check
+  # รันทุกครั้งที่มีการแก้ไข Code เพื่อเช็คความถูกต้อง
+  ci:
+    name: CI - Build Check
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -17,11 +20,52 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
+      # Test Build (ไม่ Push) เพื่อเช็คว่า Dockerfile ไม่พัง
+      - name: Build Docker image (Dry Run)
         uses: docker/build-push-action@v5
         with:
           context: .
           push: false
-          tags: gold-price-api:latest
+          tags: gold-price-api:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Job 2: Deploy - Push to Registry
+  # รันเฉพาะ Branch main และต้องผ่าน Job ci ก่อน
+  deploy:
+    name: Deploy to Docker Hub
+    needs: ci
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/gold-price-api
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'format("refs/heads/{0}", "main")' }}
+            type=sha
+            type=ref,event=tag
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
