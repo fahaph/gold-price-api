@@ -22,7 +22,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # แปลงชื่อ Image เป็นตัวพิมพ์เล็ก (ป้องกันปัญหา UpperCase)
       - name: Lowercase Image Name
         run: |
           echo "IMAGE_NAME=${IMAGE_NAME,,}" >>${GITHUB_ENV}
@@ -43,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # อนุญาตเขียน Package
+      packages: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -87,8 +86,6 @@ jobs:
     needs: deploy
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      packages: read # สำคัญ: ต้องมีสิทธิ์อ่าน Package เพื่อ Pull Image
     steps:
       - name: Lowercase Image Name
         run: |
@@ -101,30 +98,26 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # ใช้ชื่อ Image แบบตัวพิมพ์เล็ก
             IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
 
+            # Login using PAT (Personal Access Token)
+            # ต้องใช้ PAT เนื่องจาก GITHUB_TOKEN อาจมีปัญหาเรื่องสิทธิ์กับ External Server ในบางกรณี
+            echo ${{ secrets.GHCR_PAT }} | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
             echo "Pulling image: $IMAGE"
-
-            # Login
-            echo ${{ secrets.GITHUB_TOKEN }} | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            # Pull
             sudo docker pull $IMAGE
 
-            # Stop & Login Check
             if [ "$(sudo docker ps -q -f name=gold-price-api)" ]; then
-                echo "Stopping existing container..."
+                echo "Stopping container..."
                 sudo docker stop gold-price-api
             fi
 
             if [ "$(sudo docker ps -aq -f name=gold-price-api)" ]; then
-                echo "Removing existing container..."
+                echo "Removing container..."
                 sudo docker rm gold-price-api
             fi
 
-            # Run
-            echo "Starting new container..."
+            echo "Starting container..."
             sudo docker run -d \
               --name gold-price-api \
               --restart always \
