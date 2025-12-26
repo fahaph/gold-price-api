@@ -7,12 +7,18 @@ on:
   pull_request:
     branches: ["main", "master"]
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
   # Job 1: CI - Test and Build Check
   # รันทุกครั้งที่มีการแก้ไข Code เพื่อเช็คความถูกต้อง
   ci:
     name: CI - Build Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,26 +32,30 @@ jobs:
         with:
           context: .
           push: false
-          tags: gold-price-api:test
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Job 2: Deploy - Push to Registry
+  # Job 2: Deploy - Push to GitHub Container Registry
   # รันเฉพาะ Branch main และต้องผ่าน Job ci ก่อน
   deploy:
-    name: Deploy to Docker Hub
+    name: Deploy to GHCR
     needs: ci
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # อนุญาตให้เขียน Package ลง GitHub ได้
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Log in to Docker Hub
+      - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -54,7 +64,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/gold-price-api
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'format("refs/heads/{0}", "main")' }}
             type=sha
