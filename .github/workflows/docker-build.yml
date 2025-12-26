@@ -1,66 +1,66 @@
 name: CI/CD Pipeline
 
+# กำหนดเงื่อนไขว่า Pipeline นี้จะทำงานเมื่อไหร่
 on:
   push:
-    branches: ["main", "master"]
-    tags: ["v*.*.*"]
+    branches: ["main"] # ทำงานเมื่อมีการ Push โค้ดเข้า branch main
+    tags: ["v*"] # ทำงานเมื่อมีการติด Tag เวอร์ชั่น (เช่น v1.0)
   pull_request:
-    branches: ["main", "master"]
+    branches: ["main"] # ทำงานเมื่อมีการเปิด Pull Request มาที่ main
 
+# ตัวแปร Global ที่ใช้ร่วมกันทั้งไฟล์
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # Job 1: CI - Test and Build Check
-  # รันทุกครั้งที่มีการแก้ไข Code เพื่อเช็คความถูกต้อง
+  # Job ที่ 1: CI (Continuous Integration)
+  # หน้าที่: ตรวจสอบความถูกต้องของโค้ด (Build Check)
+  # จะรันทุกครั้งที่มีการแก้ไขโค้ด ไม่ว่าจะอยู่ Branch ไหน
   ci:
     name: CI - Build Check
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
-      - name: Checkout repository
+      - name: Checkout Code # ดึงโค้ดล่าสุดลงมา
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
+      - name: Set up Docker Buildx # ติดตั้งเครื่องมือ Build Docker
         uses: docker/setup-buildx-action@v3
 
-      # Test Build (ไม่ Push) เพื่อเช็คว่า Dockerfile ไม่พัง
-      - name: Build Docker image (Dry Run)
+      - name: Build Check # ลอง Build เพื่อเช็ค Error (แต่ยังไม่ Push จริง)
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: false
+          push: false # สำคัญ: ตั้งเป็น false เพราะเราแค่เช็คเฉยๆ
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:test
-          cache-from: type=gha
+          cache-from: type=gha # ดึง Cache เก่ามาใช้ (จะได้ Build เร็ว)
           cache-to: type=gha,mode=max
 
-  # Job 2: Deploy - Push to GitHub Container Registry
-  # รันเฉพาะ Branch main และต้องผ่าน Job ci ก่อน
+  # Job ที่ 2: Deploy (Continuous Deployment)
+  # หน้าที่: สร้าง Image ของจริงและส่งขึ้น Server (GitHub Registry)
   deploy:
     name: Deploy to GHCR
-    needs: ci
-    if: github.event_name != 'pull_request'
+    needs: ci # สำคัญ: ต้องผ่าน Job 'ci' ก่อน ถึงจะทำ Job นี้ได้
+    if: github.event_name != 'pull_request' # ไม่ทำถ้าเป็น Pull Request (ป้องกัน Code ที่ยังไม่ Merge หลุดไป)
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # อนุญาตให้เขียน Package ลง GitHub ได้
+      packages: write # ขอสิทธิ์เขียน Package ลง GitHub
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Log in to the Container registry
+      - name: Login to Registry # ล็อกอินเข้า GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }} # ใช้ Token อัตโนมัติ (ไม่ต้องตั้งค่าเอง)
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Extract Docker metadata
+      - name: Generate Tags # สร้างชื่อ Tag อัตโนมัติ (เช่น :latest, :sha-xxxx)
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -70,11 +70,11 @@ jobs:
             type=sha
             type=ref,event=tag
 
-      - name: Build and push Docker image
+      - name: Build and Push # สร้าง Image จริงและ Push ขึ้นเลย
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: true
+          push: true # ตั้งเป็น true เพื่อส่ง Image ขึ้น Server
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
