@@ -87,10 +87,6 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Lowercase Image Name
-        run: |
-          echo "IMAGE_NAME=${IMAGE_NAME,,}" >>${GITHUB_ENV}
-
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -98,31 +94,33 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+            # คำนวณชื่อ Image เป็นตัวพิมพ์เล็กทั้งหมด (สำคัญ!)
+            REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+            IMAGE="ghcr.io/$REPO_NAME:latest"
 
-            # Login แบบ Force Password Stdin
-            # ใช้ GHCR_PAT ถ้ามี ถ้าไม่มีให้ลองใช้ GITHUB_TOKEN (แต่แนะนำ PAT)
+            echo "Target Image: $IMAGE"
+
+            # Login
             TOKEN="${{ secrets.GHCR_PAT }}"
             if [ -z "$TOKEN" ]; then
               TOKEN="${{ secrets.GITHUB_TOKEN }}"
             fi
+            # Login โดยใช้ User ที่เป็นตัวพิมพ์เล็กด้วย
+            ACTOR=$(echo "${{ github.actor }}" | tr '[:upper:]' '[:lower:]')
+            echo $TOKEN | sudo docker login ghcr.io -u $ACTOR --password-stdin
 
-            echo $TOKEN | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            echo "Pulling image: $IMAGE"
+            # Pull
             sudo docker pull $IMAGE
 
+            # Stop & Clean
             if [ "$(sudo docker ps -q -f name=gold-price-api)" ]; then
-                echo "Stopping container..."
                 sudo docker stop gold-price-api
             fi
-
             if [ "$(sudo docker ps -aq -f name=gold-price-api)" ]; then
-                echo "Removing container..."
                 sudo docker rm gold-price-api
             fi
 
-            echo "Starting container..."
+            # Run
             sudo docker run -d \
               --name gold-price-api \
               --restart always \
