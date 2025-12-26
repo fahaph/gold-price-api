@@ -94,22 +94,18 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # คำนวณชื่อ Image เป็นตัวพิมพ์เล็กทั้งหมด (สำคัญ!)
+            # คำนวณชื่อ Image เป็นตัวพิมพ์เล็กทั้งหมด
             REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
             IMAGE="ghcr.io/$REPO_NAME:latest"
 
             echo "Target Image: $IMAGE"
 
-            # Login
-            TOKEN="${{ secrets.GHCR_PAT }}"
-            if [ -z "$TOKEN" ]; then
-              TOKEN="${{ secrets.GITHUB_TOKEN }}"
-            fi
-            # Login โดยใช้ User ที่เป็นตัวพิมพ์เล็กด้วย
-            ACTOR=$(echo "${{ github.actor }}" | tr '[:upper:]' '[:lower:]')
-            echo $TOKEN | sudo docker login ghcr.io -u $ACTOR --password-stdin
+            # !!! สำคัญ !!!
+            # ในเมื่อ Package เป็น Public แล้ว -> ไม่ต้อง Login ครับ!
+            # การพยายาม Login อาจทำให้เกิด Error ถ้า Token ไม่ถูกต้อง
+            # เราลบคำสั่ง docker login ออกเลย เพื่อดึงแบบ Anonymous (ซึ่งทำได้เพราะเป็น Public)
 
-            # Pull
+            echo "Pulling image (Public)..."
             sudo docker pull $IMAGE
 
             # Stop & Clean
