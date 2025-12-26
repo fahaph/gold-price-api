@@ -42,8 +42,9 @@ class LoveController {
       res,
       {
         loveMessage: randomMessage,
+        reference: "https://www.thairath.co.th/lifestyle/life/2270047",
       },
-      "ส่งด้วยความรัก... อิอิอิอิอิ"
+      "ส่งด้วยความรัก และความห่วงใย..."
     );
   }
 }
