@@ -94,21 +94,22 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # คำนวณชื่อ Image เป็นตัวพิมพ์เล็กทั้งหมด
             REPO_NAME=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
             IMAGE="ghcr.io/$REPO_NAME:latest"
 
             echo "Target Image: $IMAGE"
 
-            # !!! สำคัญ !!!
-            # ในเมื่อ Package เป็น Public แล้ว -> ไม่ต้อง Login ครับ!
-            # การพยายาม Login อาจทำให้เกิด Error ถ้า Token ไม่ถูกต้อง
-            # เราลบคำสั่ง docker login ออกเลย เพื่อดึงแบบ Anonymous (ซึ่งทำได้เพราะเป็น Public)
+            # --- แก้ไขไม้ตาย ---
+            # ปัญหา: Docker บน Server อาจจะจำ Token เก่าที่ผิดๆ ไว้ใน config.json
+            # ผลคือมันพยายาม Login ด้วย Token ผิดๆ แทนที่จะโหลดแบบ Anonymous
+            # วิธีแก้: สั่ง Logout ออกให้หมดก่อน!
 
-            echo "Pulling image (Public)..."
+            echo "Clearing old credentials..."
+            sudo docker logout ghcr.io || true
+
+            echo "Pulling image (Anonymous/Public)..."
             sudo docker pull $IMAGE
 
-            # Stop & Clean
             if [ "$(sudo docker ps -q -f name=gold-price-api)" ]; then
                 sudo docker stop gold-price-api
             fi
@@ -116,7 +117,6 @@ jobs:
                 sudo docker rm gold-price-api
             fi
 
-            # Run
             sudo docker run -d \
               --name gold-price-api \
               --restart always \
