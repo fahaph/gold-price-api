@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline 
 
 # กำหนดเงื่อนไขว่า Pipeline นี้จะทำงานเมื่อไหร่
 on:
