@@ -100,9 +100,14 @@ jobs:
           script: |
             IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
 
-            # Login using PAT (Personal Access Token)
-            # ต้องใช้ PAT เนื่องจาก GITHUB_TOKEN อาจมีปัญหาเรื่องสิทธิ์กับ External Server ในบางกรณี
-            echo ${{ secrets.GHCR_PAT }} | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            # Login แบบ Force Password Stdin
+            # ใช้ GHCR_PAT ถ้ามี ถ้าไม่มีให้ลองใช้ GITHUB_TOKEN (แต่แนะนำ PAT)
+            TOKEN="${{ secrets.GHCR_PAT }}"
+            if [ -z "$TOKEN" ]; then
+              TOKEN="${{ secrets.GITHUB_TOKEN }}"
+            fi
+
+            echo $TOKEN | sudo docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             echo "Pulling image: $IMAGE"
             sudo docker pull $IMAGE
