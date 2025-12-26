@@ -119,5 +119,6 @@ jobs:
             sudo docker run -d \
               --name gold-price-api \
               --restart always \
+              --network bridge \
               -p 3000:3000 \
               $IMAGE
