@@ -121,4 +121,18 @@ jobs:
               --restart always \
               --network bridge \
               -p 3000:3000 \
+              -e PORT=3000 \
               $IMAGE
+
+            # รอให้ Container เริ่มทำงาน
+            sleep 3
+
+            # เช็คว่า Container รันอยู่หรือเปล่า
+            if [ "$(sudo docker ps -q -f name=gold-price-api)" ]; then
+                echo "✅ Container is running"
+                sudo docker logs --tail 20 gold-price-api
+            else
+                echo "❌ Container failed to start"
+                sudo docker logs gold-price-api
+                exit 1
+            fi
