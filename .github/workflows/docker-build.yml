@@ -79,3 +79,35 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Job ที่ 3: Deploy to EC2
+  # หน้าที่: รีโมทเข้าไปที่เซิร์ฟเวอร์เพื่อ pull image ใหม่และเริ่มทำงาน
+  deploy-to-ec2:
+    name: Deploy to EC2
+    needs: deploy # ต้องรอให้ Push image เสร็จก่อน
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }} # IP ของเครื่อง EC2 (ใส่ใน Secrets)
+          username: ${{ secrets.EC2_USER }} # ชื่อ User (ปกติคือ ubuntu)
+          key: ${{ secrets.EC2_SSH_KEY }} # Private Key (ใส่ใน Secrets)
+          script: |
+            # Login เข้า GHCR บนเครื่อง Server (ถ้าเป็น Private Repo)
+            echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Pull Image ล่าสุด
+            docker pull ghcr.io/${{ github.repository }}:latest
+
+            # Stop และ Remove Container ตัวเก่า (ถ้ามี)
+            docker stop gold-price-api || true
+            docker rm gold-price-api || true
+
+            # Start Container ใหม่
+            docker run -d \
+              --name gold-price-api \
+              --restart always \
+              -p 3000:3000 \
+              ghcr.io/${{ github.repository }}:latest
